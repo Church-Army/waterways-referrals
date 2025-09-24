@@ -1,0 +1,19 @@
+---
+title: Reading and Cleaning data
+author: Dave
+format: html
+---
+
+```{r setup}
+library(here)
+library(fs)
+library(dplyr)
+library(tidyr)
+library(vroom)
+library(janitor)
+```
+
+```{r read_and_clean}
+ref <- vroom(here("data", "waterways-referrals.csv")) |>
+	clean_names()
+```
