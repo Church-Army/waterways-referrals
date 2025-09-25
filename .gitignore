@@ -5,3 +5,11 @@
 .httr-oauth
 .DS_Store
 .quarto
+
+## Qmd files
+
+R/*_cache/
+R/*_files/
+**.json
+R/**/libs/
+**.html

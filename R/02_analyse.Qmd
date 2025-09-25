@@ -1,0 +1,73 @@
+---
+title: "Analysis"
+author: "Dave"
+format: html
+editor: visual
+---
+
+```{r setup}
+library(here)
+library(fs)
+library(dplyr)
+library(scales)
+library(knitr)
+library(openxlsx)
+library(rlang)
+library(purrr)
+
+ref <- readRDS(here("data", "01_wwc-referrals-anon-cleaned.RDS"))
+```
+
+```{r summary_functions}
+tables <- list()
+
+tabulate <- function(x, col){
+  
+  col <- enexpr(col)
+  col_label <- as_label(col)
+  
+  out <- 
+    summarise(x, n = n_distinct(ref_id), .by = !!col) |> 
+    mutate(`%` = label_percent(1)(prop.table(n))) |> 
+    arrange(-n)
+  
+  out
+}
+```
+
+## Key words
+
+```{r tabulate_key_words}
+tables$key_words <- tabulate(ref, key_words) 
+```
+
+## Hubs
+
+```{r tabulate_hubs}
+tables$hub <- tabulate(ref, hub)
+```
+
+## North/South/National
+
+```{r tabulate_north_south_national}
+tables$north_south_national <- tabulate(ref, north_south_national)
+```
+
+## Status
+
+```{r tabulate_status}
+tables$status <- tabulate(ref, status)
+```
+
+## Chaplain
+
+```{r tabulate_wwc}
+tables$chaplain <- tabulate(ref, wwc)
+```
+
+## Create workbook
+
+```{r createworkbook}
+wb <- buildWorkbook(tables)
+saveWorkbook(wb, here("data", "waterways-referrals.xlsx"), overwrite = TRUE)
+```

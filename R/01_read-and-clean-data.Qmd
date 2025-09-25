@@ -11,9 +11,50 @@ library(dplyr)
 library(tidyr)
 library(vroom)
 library(janitor)
+library(tidyr)
+library(stringr)
 ```
 
 ```{r read_and_clean}
-ref <- vroom(here("data", "wwc-referrals.csv")) |>
+ref <- vroom(here("data", "wwc-referrals-anon.csv")) |>
 	clean_names()
+
+lead_zeroes <- 
+  function(x){
+    digits <- floor(log(x, 10)) + 1
+    str_pad(x, max(digits), pad = "0")
+  }
+
+ref <- 
+  mutate(ref, 
+         ref_id = str_c("R", lead_zeroes(row_number())),
+         .before = name) 
+
+ref <- separate_longer_delim(ref, key_words, ",")
+
+ref <- select(ref, where(\(x) !all(is.na(x))))
+
+ref <- 
+  mutate(
+    ref,
+    wwc =
+      str_remove(wwc, "[Pp]assed [Tt]o ") |> 
+      str_squish()
+  )
 ```
+
+## Data types
+
+```{r data_types}
+ref <- 
+  mutate(
+    ref, 
+    across(c(key_words, how_they_came), factor))
+```
+
+## Save
+
+```{r save}
+saveRDS(ref, here("data", "01_wwc-referrals-anon-cleaned.RDS"))
+```
+
