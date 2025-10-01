@@ -12,7 +12,9 @@ library(tidyr)
 library(vroom)
 library(janitor)
 library(tidyr)
+library(lubridate)
 library(stringr)
+library(purrr)
 ```
 
 ```{r read_and_clean}
@@ -50,6 +52,99 @@ ref <-
   mutate(
     ref, 
     across(c(key_words, how_they_came), factor))
+```
+
+### Timestamps
+
+```{r timestamps}
+ref <- mutate(ref, last_updated = dmy_hm(last_updated))
+```
+
+### Pivot names longer
+
+```{r pivot_names_longer}
+ref <- 
+  mutate(ref,
+         wwc =
+           str_squish(wwc) |> 
+           str_to_lower(),
+         wwc = replace(wwc, wwc == "-", NA))
+
+## Create string of individual wwc names
+ref <- 
+  mutate(ref, wwc_individual = wwc) |> 
+  separate_longer_delim(wwc_individual, regex("/| and |&|, ")) |> 
+  mutate(wwc_individual = str_squish(wwc_individual) |> 
+           str_to_title()) |> 
+  group_by(across(-wwc_individual)) |> 
+  summarise(wwc_individual = list(wwc_individual), .groups = "drop")
+
+## Fix surname only being applied to one spouse e.g. list("John", "Jane Doe")
+fix_surnames <- function(x){
+  ## If vector is one-word name, then two word name:
+  if(length(x) == 2 && !any(is.na(x))){
+    
+    one_then_two_words <- all(str_count(x, boundary("word")) == 1:2)
+  
+    if(one_then_two_words){
+               
+      surname <- last(str_split_1(x[2], boundary("word")))
+               
+      x[1] <- str_c(x[1], surname, sep = " ")
+    }
+  }
+  x
+}
+
+ref <- 
+  rowwise(ref) |> 
+  mutate(wwc_individual = list(fix_surnames(wwc_individual)))
+
+
+## Unnest individual chaplains
+ref <- 
+  ungroup(ref) |> 
+  unnest(wwc_individual) 
+
+## Remove/fix bad values
+ref <- 
+  filter(ref, !wwc_individual %in% c("Hub")) |> 
+  mutate(wwc_individual = 
+           case_match(
+             wwc_individual,
+             "Sallyann Ford When At St Pancras" ~ "Sallyann Ford",
+             "Albert Bottell" ~ "Albert Bottel",
+             "Albert Botell"  ~ "Albert Bottel",
+             "Charles Garvin" ~ "Charles Garven",
+             "Ferghus Mccloghry" ~ "Fergus McCloghry",
+             "Fergus Mccloghry" ~ "Fergus McCloghry",
+             "Fergus Mcloghry"  ~ "Fergus McCloghry",
+             "Fergus Mcloughry" ~ "Fergus McCloghry",
+             "Howie Pickeirng" ~ "Howie Pickering",
+             "Howie" ~ "Howie Pickering",
+             "Joh Speight" ~ "John Speight",
+             "Kim Mccloghry" ~ "Kim McCloghry",
+             "Andrew Smith" ~ "Andy Smith",
+             "Lorrain Newman" ~ "Lorraine Newman",
+             "Lorraine" ~ "Lorraine Newman",
+             "Lorriane Newman" ~ "Lorraine Newman",
+             "Stephen" ~ NA,
+             "Stephen Byker" ~ "Stephen Bykar",
+             "Steven Fraser" ~ "Stephen Fraser",
+             "Susan Smith" ~ "Sue Smith",
+             "Sally Davis" ~ "Sally Davies",
+             "Yvonne" ~ "Yvonne Wilmot",
+             "Tina Clark" ~ "Tina Clarke",
+             "David To Allocate" ~ "David Green",
+             
+             .default = wwc_individual))
+
+ref <- 
+  group_by(ref, across(-wwc_individual)) |> 
+  summarise(wwc_individual = list(wwc_individual), .groups = "drop")
+
+
+
 ```
 
 ## Save

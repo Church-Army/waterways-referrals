@@ -1,0 +1,102 @@
+---
+title: "Timestamp Analysis"
+author: "Dave"
+format: html
+editor: visual
+---
+
+```{r setup}
+library(fs)
+library(here)
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(scales)
+library(tidyr)
+
+ref <- readRDS(here("data", "01_wwc-referrals-anon-cleaned.RDS"))
+```
+
+## Add day/week/month variables
+
+```{r round_dates}
+ref <- 
+  mutate(
+    ref,
+    
+    last_updated_day    = floor_date(last_updated, "day"),
+    last_updated_week   = floor_date(last_updated, "week"),
+    last_updated_month  = floor_date(last_updated, "month")
+  )
+
+ref <- filter(ref, last_updated_month >= make_date(2024, 10))
+```
+
+## Group by month
+
+```{r group_by_month}
+select(ref, -key_words) |> 
+  distinct() |> 
+  group_by(last_updated_month) |> 
+  count() |> 
+  ggplot(aes(y = n, x = last_updated_month)) +
+  geom_area(linewidth = 1, alpha = 0.6, colour = "darkgreen", fill = "darkgreen") +
+  scale_x_datetime(
+    name = "Date last updated",
+    date_minor_breaks = "month") +
+  scale_y_continuous(
+    name = "Number of referrals",
+    limits = c(0, NA)
+  ) +
+  geom_text(aes(label = paste("Monthly avg:", round(mean(n), 0)),
+                y = mean(n)-2),
+            x = I(0.78)) + 
+  geom_line(aes(y = mean(n)), linetype = "dashed") + 
+  theme_minimal() +
+  ggtitle("Last updates to WWC referrals",
+          subtitle = "Oct 2024 - Sep 2025")
+```
+
+## By month and type
+
+```{r month_and_type}
+lil <- 
+  mutate(
+  ref,
+  prop_updates = 1/n_distinct(ref_id)) |> 
+  
+  select(ref_id, prop_updates, key_words, last_updated_month) |> 
+  
+complete(
+  last_updated_month = seq(min(last_updated_month), max(last_updated_month), by = "1 month"),
+  key_words,
+  fill = list(prop_updates = 0)) |> 
+  group_by(last_updated_month, key_words) |> 
+  summarise(across(prop_updates, sum))
+
+lil <- 
+  group_by(lil, last_updated_month,
+           boat_maintenance = key_words %in% "Mental health") |> 
+  summarise(across(prop_updates, sum))
+
+ggplot(lil, 
+       aes(y = prop_updates, x = last_updated_month,
+           fill = boat_maintenance, colour = boat_maintenance)) +
+  geom_area(linewidth = 1, alpha = 0.6) +
+  scale_x_datetime(
+    name = "Date last updated",
+    date_minor_breaks = "month") +
+  scale_y_continuous(
+    name = "Number of referrals",
+    limits = c(0, NA),
+    labels = label_percent()
+  ) +
+  geom_text(aes(label = paste("Monthly avg:", round(mean(n), 0)),
+                y = mean(n)-2),
+            x = I(0.78)) + 
+  geom_line(aes(y = mean(n)), linetype = "dashed") + 
+  theme_minimal() +
+  ggtitle("Last updates to WWC referrals",
+          subtitle = "Oct 2024 - Sep 2025") +
+  guides(fill = "none")
+```

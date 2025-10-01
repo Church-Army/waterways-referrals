@@ -14,8 +14,17 @@ library(knitr)
 library(openxlsx)
 library(rlang)
 library(purrr)
+library(tidyr)
 
 ref <- readRDS(here("data", "01_wwc-referrals-anon-cleaned.RDS"))
+
+ref_keyword <- ref
+
+ref <- 
+  select(ref, -key_words) |> 
+  distinct()
+
+ref_wwc_individuals <- unnest(ref, wwc_individual = wwc_individual)
 ```
 
 ```{r summary_functions}
@@ -23,11 +32,8 @@ tables <- list()
 
 tabulate <- function(x, col){
   
-  col <- enexpr(col)
-  col_label <- as_label(col)
-  
   out <- 
-    summarise(x, n = n_distinct(ref_id), .by = !!col) |> 
+    summarise(x, n = n_distinct(ref_id), .by = {{col}}) |> 
     mutate(`%` = label_percent(1)(prop.table(n))) |> 
     arrange(-n)
   
@@ -35,34 +41,30 @@ tabulate <- function(x, col){
 }
 ```
 
-## Key words
+## Make tables
 
-```{r tabulate_key_words}
-tables$key_words <- tabulate(ref, key_words) 
-```
+```{r tables}
+variables <- c("hub", "north_south_national", "status", "how_they_came")
 
-## Hubs
+names(variables) <- variables
 
-```{r tabulate_hubs}
-tables$hub <- tabulate(ref, hub)
-```
+tables <- map(syms(variables), tabulate, x = ref)
 
-## North/South/National
+tables$key_words <-
+  mutate(ref_keyword,
+         prop_refs = 1/n_distinct(ref_id),
+         n = 1) |> 
+  summarise(across(c(n, prop_refs), sum), .by = key_words) |> 
+  mutate(`%` = label_percent(1)(prop_refs), .keep = "unused") |> 
+  arrange(-n)
 
-```{r tabulate_north_south_national}
-tables$north_south_national <- tabulate(ref, north_south_national)
-```
-
-## Status
-
-```{r tabulate_status}
-tables$status <- tabulate(ref, status)
-```
-
-## Chaplain
-
-```{r tabulate_wwc}
-tables$chaplain <- tabulate(ref, wwc)
+tables$chaplains <-
+  mutate(ref_wwc_individuals,
+         prop_refs = 1/n_distinct(ref_id),
+         n = 1) |> 
+  summarise(across(c(n, prop_refs), sum), .by = wwc_individual) |> 
+  mutate(`%` = label_percent(1)(prop_refs), .keep = "unused") |> 
+  arrange(-n)
 ```
 
 ## Create workbook
